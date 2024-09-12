@@ -1,13 +1,11 @@
-let is_prime n = 
-  let rec go i =
-    if i = n then 
-      true
-  else if n mod i = 0 then 
-    false
-else 
-  go (i + 1)
-in if n < 2 then false else go 2;;
-
+let is_prime n =
+  let rec check i =
+    if i * i > n then true
+    else if n mod i = 0 then false
+    else check (i + 1)
+  in
+  if n <= 1 then false
+  else check 2
 
 
 let nth_prime i =
