@@ -6,5 +6,6 @@ let nth s i =
     if encoded mod prime <> 0 then 
       count
     else 
-      count_exponent (encoded / prime) (count + 1) 
-  count_exponent s 0
+      count_exponent (encoded / prime) (count + 1)
+  
+in count_exponent s 0
