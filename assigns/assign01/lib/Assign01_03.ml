@@ -1,12 +1,10 @@
 open Assign01_02
 
 let nth s i = 
-  let prime = nth_prime i
-  in 
-  let rec count encoded numPrimes = 
+  let prime = nth_prime i in
+    let rec count_exponent encoded count =
     if encoded mod prime <> 0 then 
-      numPrimes
+      count
     else 
-      count (encoded / prime) (numPrimes + 1)
-
-  in count s 0;;
+      count_exponent (encoded / prime) (count + 1) 
+  count_exponent s 0
