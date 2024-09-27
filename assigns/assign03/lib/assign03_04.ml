@@ -1,3 +1,6 @@
+(* psudocode : we want ot check validity by finding if there is a zero and if so then it must have non zero integers on either size
+   then we want to check if the signs are alternating which we can do in sublists*)
+
 let determine_sign x =
   if x > 0 then 1
   else if x < 0 then -1
