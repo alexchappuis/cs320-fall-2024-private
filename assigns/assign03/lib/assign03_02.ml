@@ -1,4 +1,4 @@
-let gen_fib l k =
+(*let gen_fib l k =
   let rec gen_fib_helper l k =
     let len_l = List.length l in
     if k < len_l then List.nth l k
@@ -14,4 +14,7 @@ let gen_fib l k =
   else
     gen_fib_helper l k
 
- 
+ *)
+
+ let gen_fib _ _ = 1
+
