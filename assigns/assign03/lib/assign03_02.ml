@@ -1,15 +1,15 @@
 let gen_fib l k =
-  let rec gen_fib_helper l k =
-    let len_l = List.length l in
-    if k < len_l then List.nth l k
-    else
-      let rec sum_previous n acc count =
-        if count = 0 then acc
-        else sum_previous n (acc + (gen_fib_helper l (n - count))) (count - 1)
+  let len = List.length l in
+  let rec aux n acc =
+    let rec sum_previous i total =
+      if i <= 0 then total
+      else sum_previous (i - 1) (total + aux (n - i) acc)
+    in
+      let sum_previous i total =
+        if i = 0 then total
+        else sum_previous (i - 1) (total + aux (n - i) acc)
       in
-      sum_previous k 0 len_l
+      aux (n + 1) (sum_previous len 0)  (* recursive call with update parameters *)
   in
-  if List.length l = 0 || k < 0 then
-    failwith "not valid"
-  else
-    gen_fib_helper l k 
+  if k < 0 || len = 0 then failwith "Invalid input"
+  else aux k 0
