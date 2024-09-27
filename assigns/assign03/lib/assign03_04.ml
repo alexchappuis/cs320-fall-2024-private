@@ -1,51 +1,50 @@
-let sign n =
-  if n > 0 then 1
-  else if n < 0 then -1
+let determine_sign x =
+  if x > 0 then 1
+  else if x < 0 then -1
   else 0
 
-let rec drop n lst =
-  match lst with
+let rec remove n list =
+  match list with
   | [] -> []
-  | _ :: tl ->
-      if n <= 0 then lst  
-      else drop (n - 1) tl  
+  | _ :: tail ->
+      if n <= 0 then list
+      else remove (n - 1) tail
 
-let is_valid_list lst =
-  let rec check_sublists lst prev_sign =
-    match lst with
-    | [] -> true  
-    | 0 :: tl -> check_sublists tl prev_sign 
-    | hd :: tl when sign hd = 0 -> check_sublists tl prev_sign 
-    | hd :: tl ->
-        let current_sign = sign hd in
-        if prev_sign = 0 || prev_sign <> current_sign then
-          let rec get_samesign_sublist lst curr_sign =
-            match lst with
-            | hd :: tl when sign hd = curr_sign -> hd :: get_samesign_sublist tl curr_sign
-            | _ -> []
-          in
-          let sublist = get_samesign_sublist (hd :: tl) current_sign in
-          let remaining = drop (List.length sublist) (hd :: tl) in
-          check_sublists remaining current_sign
+let is_list_valid list =
+  let rec verify_sublists list last_sign =
+    match list with
+    | [] -> true
+    | 0 :: tail -> 
+        if last_sign = 0 then false (* 2 0s in a row are invalid *)
+        else verify_sublists tail 0
+    | head :: tail when determine_sign head = 0 -> verify_sublists tail last_sign
+    | head :: tail ->
+        let current_sign = determine_sign head in
+        if last_sign = 0 || last_sign <> current_sign then
+          verify_sublists (remove (List.length (gather_same_sign_sublist (head :: tail) current_sign)) (head :: tail)) current_sign
         else
-          false  
+          false
+  and gather_same_sign_sublist sublist current_sign =
+    match sublist with
+    | head_sub :: tail_sub when determine_sign head_sub = current_sign -> head_sub :: gather_same_sign_sublist tail_sub current_sign
+    | _ -> []
   in
-  check_sublists lst 0  
+  verify_sublists list 0
 
-let split_by_zero lst =
-  let rec aux current acc = function
-    | [] ->
-        if current = [] then List.rev acc 
+let partition_into_groups list =
+  let rec helper_fun current acc = function
+    | [] -> 
+        if current = [] then List.rev acc
         else List.rev (List.rev current :: acc)
-    | 0 :: tl ->
-        if current = [] then aux [] acc tl 
-        else aux [] (List.rev current :: acc) tl
-    | hd :: tl -> aux (hd :: current) acc tl  
+    | 0 :: tail ->
+        if current = [] then helper_fun [] acc tail
+        else helper_fun [] (List.rev current :: acc) tail
+    | head :: tail -> helper_fun (head :: current) acc tail
   in
-  aux [] [] lst 
+  helper_fun [] [] list
 
-let group l =
-  if is_valid_list l then
-    Some (split_by_zero l) 
+let group list =
+  if is_list_valid list then
+    Some (partition_into_groups list)
   else
-    None 
+    None
