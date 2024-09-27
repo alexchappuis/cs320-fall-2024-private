@@ -15,8 +15,8 @@ let t =
 
 let rec collect_terminals t =
   match t with
-  | Leaf _ -> [t]  (* leaf is terminal *)
-  | Node [] -> [t] (* node with no children is terminal *)
+  | Leaf _ -> [t]  (* terminal *)
+  | Node [] -> [t] 
   | Node children -> List.concat_map collect_terminals children
 
 let rec collapse h t =
@@ -25,7 +25,6 @@ let rec collapse h t =
     | Leaf _ -> t
     | Node children -> Node (List.concat_map collect_terminals children)
   else
-    (* Recursive case *)
     match t with
     | Leaf _ -> t 
     | Node children ->
