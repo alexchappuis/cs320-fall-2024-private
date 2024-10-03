@@ -10,9 +10,9 @@ let last_function_standing (funcs : ('a -> 'a) list) (start : 'a) (pred : 'a -> 
   match funcs with
   | [] -> None 
   | _ ->
-    let results = List.map (fun f -> (f, lifespan f start)) funcs in
+    let results = List.map (fun f -> (f, lifespan f start)) funcs in (* calculate life span *)
     let max_lifespan = List.fold_left (fun acc (_, lifespan) ->
-      match acc with
+      match acc with (* accumulator will track largest life span*)
       | None -> Some lifespan
       | Some max_lifespan when lifespan > max_lifespan -> Some lifespan
       | Some max_lifespan when lifespan = max_lifespan -> None 
@@ -23,5 +23,5 @@ let last_function_standing (funcs : ('a -> 'a) list) (start : 'a) (pred : 'a -> 
     | Some lifespan_value ->
       let last_functions = List.filter (fun (_, l) -> l = lifespan_value) results in
       match last_functions with
-      | [(f, _)] -> Some f 
+      | [(f, _)] -> Some f (*return largest life span and this is our winner*)
       | _ -> None 
