@@ -16,16 +16,16 @@ let rec eval (e: expr) : value =
     let v2 = eval e2 in
     (match v1, v2 with
      | VBool b1, VBool b2 -> VBool (b1 || b2)
-     | _ -> failwith "Invalid operation: Or requires boolean values")
+     | _ -> failwith "not valid")
   | Add (e1, e2) ->
     let v1 = eval e1 in
     let v2 = eval e2 in
     (match v1, v2 with
      | VNum n1, VNum n2 -> VNum (n1 + n2)
-     | _ -> failwith "Invalid operation: Add requires integer values")
+     | _ -> failwith "not valid")
   | IfThenElse (e1, e2, e3) ->
     let v1 = eval e1 in
     (match v1 with
      | VBool true -> eval e2
      | VBool false -> eval e3
-     | _ -> failwith "Invalid operation: IfThenElse requires a boolean condition")
+     | _ -> failwith "not valid")
