@@ -57,16 +57,17 @@ expr:
   | OR { Or }
 
 expr1:
-  | e1 = expr1; op = bop; e2 = expr1 { Bop (op, e1, e2) }
-  | e = expr2; es = expr2* { mk_app e es }
+  | e1 = expr1; op = bop; e2 = expr2 { Bop (op, e1, e2) }
+  | e = expr2 { e }
 
 expr2:
+  | e = expr3; es = expr3 { App (e, es) }
+  | e = expr3 { e }
+
+expr3:
   | UNIT { Unit }
   | TRUE { True }
   | FALSE { False }
   | n = NUM { Num n }
   | x = VAR { Var x }
   | LPAREN; e = expr; RPAREN { e }
-
-let mk_app e es =
-  List.fold_left (fun acc arg -> App (acc, arg)) e es
