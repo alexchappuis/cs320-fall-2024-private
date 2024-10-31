@@ -2,6 +2,7 @@
 open Utils
 %}
 
+// Constants and keywords
 %token <int> NUM
 %token <string> VAR
 %token IF THEN ELSE
@@ -22,13 +23,13 @@ open Utils
 %left ADD SUB
 %left MUL DIV MOD
 
-
 %start <Utils.prog> prog
 
 %%
 
+
 prog:
-  | EOF { Num 0 }
+  | e = expr; EOF { e }
 
 expr:
   | IF; cond = expr; THEN; t_expr = expr; ELSE; e_expr = expr { If (cond, t_expr, e_expr) }
@@ -66,3 +67,6 @@ expr2:
   | n = NUM { Num n }
   | x = VAR { Var x }
   | LPAREN; e = expr; RPAREN { e }
+
+let mk_app e es =
+  List.fold_left (fun acc arg -> App (acc, arg)) e es

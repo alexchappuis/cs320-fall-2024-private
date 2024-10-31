@@ -21,7 +21,6 @@ rule read =
   | "true" { TRUE }
   | "false" { FALSE }
   | "()" { UNIT }
-  | var { VAR (Lexing.lexeme lexbuf) }
   | "+" { ADD }
   | "-" { SUB }
   | "*" { MUL }
