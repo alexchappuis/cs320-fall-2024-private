@@ -32,13 +32,10 @@ prog:
   | e = expr; EOF { e }
 
 expr:
-  | IF; cond = expr; THEN; t_expr = expr; ELSE; e_expr = expr { If (cond, t_expr, e_expr) }
-  | LET; x = VAR; arg = VAR?; EQ; e1 = expr; IN; e2 = expr
-    { match arg with
-      | None -> Let (x, e1, e2)
-      | Some arg -> LetFun (x, arg, e1, e2)
-    }
+  | LET; x = VAR; EQ; e1 = expr; IN; e2 = expr
+    { Let (x, e1, e2) }
   | FUN; x = VAR; ARROW; body = expr { Fun (x, body) }
+  | IF; cond = expr; THEN; t_expr = expr; ELSE; e_expr = expr { If (cond, t_expr, e_expr) }
   | e = expr1 { e }
 
 %inline bop:
