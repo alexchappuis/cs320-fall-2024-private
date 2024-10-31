@@ -22,9 +22,9 @@ rule read =
   | "false" { FALSE }
   | "()" { UNIT }
   | var { VAR (Lexing.lexeme lexbuf) }
-  | "+" { PLUS }
-  | "-" { MINUS }
-  | "*" { TIMES }
+  | "+" { ADD }
+  | "-" { SUB }
+  | "*" { MUL }
   | "/" { DIV }
   | "mod" { MOD }
   | "<" { LT }

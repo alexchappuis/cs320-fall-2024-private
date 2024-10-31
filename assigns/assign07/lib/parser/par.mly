@@ -10,20 +10,17 @@ open Utils
 %token TRUE FALSE UNIT
 %token LPAREN RPAREN
 
-// Operators
-%token PLUS MINUS TIMES DIV MOD
+%token ADD SUB MUL DIV MOD
 %token LT LTE GT GTE EQ NEQ
 %token AND OR
 
-// End of input
 %token EOF
 
-// Precedence and associativity
 %right OR
 %right AND
 %left LT LTE GT GTE EQ NEQ
-%left PLUS MINUS
-%left TIMES DIV MOD
+%left ADD SUB
+%left MUL DIV MOD
 
 
 %start <Utils.prog> prog
