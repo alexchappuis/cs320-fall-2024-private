@@ -16,6 +16,7 @@ open Utils
 %token LPAREN
 %token RPAREN
 %token ARROW
+%token EQUALS
 %token ADD
 %token SUB
 %token MUL
@@ -29,6 +30,7 @@ open Utils
 %token NEQ
 %token AND
 %token OR
+
 
 
 %left OR

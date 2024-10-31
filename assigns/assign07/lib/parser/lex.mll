@@ -32,7 +32,7 @@ rule read =
   | "<=" { LTE }
   | ">" { GT }
   | ">=" { GTE }
-  | "=" { EQ }
+  | "=" { EQUALS }
   | "<>" { NEQ }
   | "&&" { AND }
   | "||" { OR }
