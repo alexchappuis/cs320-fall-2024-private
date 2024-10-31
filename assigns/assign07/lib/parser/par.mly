@@ -4,41 +4,27 @@ open Utils
 
 %token <int> NUM
 %token <string> VAR
+%token IF THEN ELSE
+%token LET IN
+%token FUN ARROW  
+%token TRUE FALSE UNIT
+%token LPAREN RPAREN
+
+// Operators
+%token PLUS MINUS TIMES DIV MOD
+%token LT LTE GT GTE EQ NEQ
+%token AND OR
+
+// End of input
 %token EOF
-%token IF 
-%token THEN
-%token ELSE 
-%token LET 
-%token IN
-%token FUN
-%token TRUE
-%token FALSE
-%token LPAREN
-%token RPAREN
-%token ARROW
-%token EQUALS
-%token ADD
-%token SUB
-%token MUL
-%token DIV
-%token MOD
-%token LT
-%token LTE
-%token GT
-%token GTE
-%token EQ
-%token NEQ
-%token AND
-%token OR
 
-
-
-%left OR
-%left AND
+// Precedence and associativity
+%right OR
+%right AND
 %left LT LTE GT GTE EQ NEQ
-%left ADD SUB
-%left MUL DIV MOD
-%nonassoc THEN ELSE
+%left PLUS MINUS
+%left TIMES DIV MOD
+
 
 %start <Utils.prog> prog
 
@@ -48,28 +34,16 @@ prog:
   | EOF { Num 0 }
 
 expr:
-  | IF expr THEN expr ELSE expr { If ($2, $4, $6) }
-  | LET VAR EQUALS expr IN expr { Let ($2, $4, $6) }
-  | FUN VAR ARROW expr { Fun ($2, $4) }
-  | expr2 { $1 }
+  | IF; cond = expr; THEN; t_expr = expr; ELSE; e_expr = expr { If (cond, t_expr, e_expr) }
+  | LET; x = VAR; arg = VAR?; EQ; e1 = expr; IN; e2 = expr
+    { match arg with
+      | None -> Let (x, e1, e2)
+      | Some arg -> LetFun (x, arg, e1, e2)
+    }
+  | FUN; x = VAR; ARROW; body = expr { Fun (x, body) }
+  | e = expr1 { e }
 
-expr2:
-  | expr2 bop expr2 { Bop ($2, $1, $3) }
-  | expr3 expr3s { mk_app $1 $2 }
-
-expr3:
-  | LPAREN expr RPAREN { $2 }
-  | NUM { Num $1 }
-  | VAR { Var $1 }
-  | TRUE { True }
-  | FALSE { False }
-  | LPAREN RPAREN { Unit }
-
-expr3s:
-  | { [] }
-  | expr3 expr3s { $1 :: $2 }
-
-bop:
+%inline bop:
   | ADD { Add }
   | SUB { Sub }
   | MUL { Mul }
@@ -83,3 +57,15 @@ bop:
   | NEQ { Neq }
   | AND { And }
   | OR { Or }
+
+expr1:
+  | e1 = expr1; op = bop; e2 = expr1 { Bop (op, e1, e2) }
+  | e = expr2; es = expr2* { mk_app e es }
+
+expr2:
+  | UNIT { Unit }
+  | TRUE { True }
+  | FALSE { False }
+  | n = NUM { Num n }
+  | x = VAR { Var x }
+  | LPAREN; e = expr; RPAREN { e }

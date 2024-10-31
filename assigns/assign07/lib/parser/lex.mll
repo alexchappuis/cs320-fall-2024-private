@@ -11,29 +11,31 @@ rule read =
   | num { NUM (int_of_string (Lexing.lexeme lexbuf)) }
   | var { VAR (Lexing.lexeme lexbuf) }
   | whitespace { read lexbuf }
-  | eof { EOF }
   | "if" { IF }
   | "then" { THEN }
   | "else" { ELSE }
   | "let" { LET }
   | "in" { IN }
   | "fun" { FUN }
+  | "->" { ARROW }
   | "true" { TRUE }
   | "false" { FALSE }
-  | "->" { ARROW }
-  | '(' { LPAREN }
-  | ')' { RPAREN }
-  | "+" { ADD }
-  | "-" { SUB }
-  | "*" { MUL }
+  | "()" { UNIT }
+  | var { VAR (Lexing.lexeme lexbuf) }
+  | "+" { PLUS }
+  | "-" { MINUS }
+  | "*" { TIMES }
   | "/" { DIV }
   | "mod" { MOD }
   | "<" { LT }
   | "<=" { LTE }
   | ">" { GT }
   | ">=" { GTE }
-  | "=" { EQUALS }
+  | "=" { EQ }
   | "<>" { NEQ }
   | "&&" { AND }
   | "||" { OR }
-  | _ { failwith "Unexpected character" }
+  | "(" { LPAREN }
+  | ")" { RPAREN }
+  | eof { EOF }
+  | _ { failwith "Unknown character" }
