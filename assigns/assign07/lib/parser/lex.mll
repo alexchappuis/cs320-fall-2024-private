@@ -6,21 +6,20 @@ let whitespace = [' ' '\t' '\n' '\r']+
 let num = '-'? ['0'-'9']+
 let var = ['a'-'z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_' '\'']*
 
-rule read =
+rule read = 
   parse
-  | num { NUM (int_of_string (Lexing.lexeme lexbuf)) }
-  | var { VAR (Lexing.lexeme lexbuf) }
-  | whitespace { read lexbuf }
   | "if" { IF }
   | "then" { THEN }
   | "else" { ELSE }
   | "let" { LET }
+  | "=" { EQ }
   | "in" { IN }
   | "fun" { FUN }
-  | "->" { ARROW }
+  | "{" { LCURLY }
+  | "}" { RCURLY }
+  | "()" { UNIT }
   | "true" { TRUE }
   | "false" { FALSE }
-  | "()" { UNIT }
   | "+" { ADD }
   | "-" { SUB }
   | "*" { MUL }
@@ -30,11 +29,13 @@ rule read =
   | "<=" { LTE }
   | ">" { GT }
   | ">=" { GTE }
-  | "=" { EQ }
   | "<>" { NEQ }
   | "&&" { AND }
   | "||" { OR }
+  | "->" { ARROW }
   | "(" { LPAREN }
   | ")" { RPAREN }
+  | num { NUM (int_of_string (Lexing.lexeme lexbuf)) }
+  | var { VAR (Lexing.lexeme lexbuf) }
+  | whitespace { read lexbuf }
   | eof { EOF }
-  | _ { failwith "Unknown character" }
