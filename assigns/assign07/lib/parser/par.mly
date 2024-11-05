@@ -2,7 +2,6 @@
 open Utils
 %}
 
-// Constants and keywords
 %token <int> NUM
 %token <string> VAR
 %token IF THEN ELSE
