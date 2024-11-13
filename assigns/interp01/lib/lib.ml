@@ -2,7 +2,7 @@
 open Utils 
 include parser
 
-let parse s = parser.parse s
+let parse = My_parser.parse
 
 
 let convert_value_to_expr = function
