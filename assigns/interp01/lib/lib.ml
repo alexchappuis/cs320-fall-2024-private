@@ -23,19 +23,22 @@ let substitute_var a b =
     | Unit -> Unit
   in internal_replace
 
-let rec subst (value : value) (var : string) (expr : expr) : expr =
-  match expr with
-  | Num _ | True | False | Unit -> expr
-  | Var v -> if v = var then convert_value_to_expr value else expr
-  | If (cond, then_expr, else_expr) -> If (subst value var cond, subst value var then_expr, subst value var else_expr)
-  | Let (v, init, body) -> 
-      if v = var then Let (v, subst value var init, body)
-      else let new_var = gensym () in Let (new_var, subst value var init, subst value var (substitute_var new_var v body))
-  | Fun (v, body) -> 
-      if v = var then expr 
-      else let new_var = gensym () in Fun (new_var, subst value var (substitute_var new_var v body))
-  | App (f, arg) -> App (subst value var f, subst value var arg)
-  | Bop (op, l, r) -> Bop (op, subst value var l, subst value var r)
+  let rec subst x e1 e2 =
+    match e2 with
+    | Num _ -> e2
+    | True -> e2
+    | False -> e2
+    | Unit -> e2
+    | Var y -> if x = y then e1 else e2
+    | If (e21, e22, e23) -> If (subst x e1 e21, subst x e1 e22, subst x e1 e23)
+    | Let (y, e21, e22) ->
+        if x = y then e2
+        else Let (y, subst x e1 e21, subst x e1 e22)
+    | Fun (y, body) ->
+        if x = y then e2
+        else Fun (y, subst x e1 body)
+    | App (e21, e22) -> App (subst x e1 e21, subst x e1 e22)
+    | Bop (op, e21, e22) -> Bop (op, subst x e1 e21, subst x e1 e22)
 
 let evaluate_binary_operation op v1 v2 =
   match op, v1, v2 with
