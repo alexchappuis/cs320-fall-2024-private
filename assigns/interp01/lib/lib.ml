@@ -1,8 +1,7 @@
 
-open Utils 
+open Utils
 
 let parse = My_parser.parse
-
 
 let convert_value_to_expr = function
   | VNum number -> Num number
@@ -102,7 +101,7 @@ let rec eval (expr : expr) : (value, error) result =
           | Ok right_val -> evaluate_binary_operation operator left_val right_val
           | Error error_val -> Error error_val)
       | Error error_val -> Error error_val)
-  
+      
 let interp (code_input : string) : (value, error) result =
   match parse code_input with
   | Some program -> eval program
