@@ -1,12 +1,12 @@
-{ open Par }
+{
+open Par
+}
 
-
-
-let ws = [' ' '\t' '\n' '\r']+
+let whitespace = [' ' '\t' '\n' '\r']+
 let num = '-'? ['0'-'9']+
 let var = ['a'-'z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_' '\'']*
 
-rule read =
+rule read = 
   parse
   | "if" { IF }
   | "then" { THEN }
@@ -15,10 +15,11 @@ rule read =
   | "=" { EQ }
   | "in" { IN }
   | "fun" { FUN }
+  | "{" { LCURLY }
+  | "}" { RCURLY }
+  | "()" { UNIT }
   | "true" { TRUE }
   | "false" { FALSE }
-  | "()" { UNIT }
-  | "->" { ARROW }
   | "+" { ADD }
   | "-" { SUB }
   | "*" { MUL }
@@ -31,9 +32,10 @@ rule read =
   | "<>" { NEQ }
   | "&&" { AND }
   | "||" { OR }
+  | "->" { ARROW }
   | "(" { LPAREN }
   | ")" { RPAREN }
   | num { NUM (int_of_string (Lexing.lexeme lexbuf)) }
   | var { VAR (Lexing.lexeme lexbuf) }
-  | ws { read lexbuf }
+  | whitespace { read lexbuf }
   | eof { EOF }
