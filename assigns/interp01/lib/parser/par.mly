@@ -1,3 +1,12 @@
+%{
+open Utils
+
+let rec mk_app e es =
+  match es with
+  | [] -> e
+  | x :: es -> mk_app (App (e, x)) es
+%}
+
 %token <int> NUM
 %token <string> VAR
 %token EOF
