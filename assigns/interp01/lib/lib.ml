@@ -1,6 +1,5 @@
 
 open Utils 
-include parser
 
 let parse = My_parser.parse
 
