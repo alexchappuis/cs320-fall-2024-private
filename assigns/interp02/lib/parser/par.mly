@@ -7,6 +7,7 @@ let rec mk_app e es =
   | x :: es -> mk_app (App (e, x)) es
 %}
 
+
 %token <int> NUM
 %token <string> VAR
 %token EOF
@@ -14,6 +15,7 @@ let rec mk_app e es =
 %token ADD SUB MUL DIV MOD LT LTE GT GTE EQ NEQ AND OR
 %token LPAREN RPAREN COLON
 %token TRUE FALSE UNIT
+%token INTTY BOOLTY UNITTY
 
 %right OR
 %right AND
