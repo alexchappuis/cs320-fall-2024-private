@@ -1,5 +1,7 @@
 open Utils
 
+let parse = My_parser.parse
+
 let rec desugar prog =
   match prog with
   | [] -> Unit
@@ -71,24 +73,24 @@ let rec eval env expr =
     | Add (e1, e2) ->
         (match eval_expr e1, eval_expr e2 with
         | VNum n1, VNum n2 -> VNum (n1 + n2)
-        | _ -> raise (Failure "Invalid addition"))
+        | _ -> raise (Failure "Invalid"))
     | Sub (e1, e2) ->
         (match eval_expr e1, eval_expr e2 with
         | VNum n1, VNum n2 -> VNum (n1 - n2)
-        | _ -> raise (Failure "Invalid subtraction"))
+        | _ -> raise (Failure "Invalid"))
     | Mul (e1, e2) ->
         (match eval_expr e1, eval_expr e2 with
         | VNum n1, VNum n2 -> VNum (n1 * n2)
-        | _ -> raise (Failure "Invalid multiplication"))
+        | _ -> raise (Failure "Invalid"))
     | Eq (e1, e2) ->
         (match eval_expr e1, eval_expr e2 with
         | VNum n1, VNum n2 -> VBool (n1 = n2)
-        | _ -> raise (Failure "Invalid equality comparison"))
+        | _ -> raise (Failure "Invalid"))
     | If (e1, e2, e3) ->
         (match eval_expr e1 with
         | VBool true -> eval_expr e2
         | VBool false -> eval_expr e3
-        | _ -> raise (Failure "Condition is not a boolean"))
+        | _ -> raise (Failure "Invalid"))
     | Let (x, _, e1, e2) ->
         let v = eval_expr e1 in
         eval (Env.add x v env) e2
@@ -106,7 +108,7 @@ let rec eval env expr =
               Env.add f (VClos (x, body, closure_env, Some f)) closure_env
             in
             eval (Env.add x v new_env) body
-        | _ -> raise (Failure "Application to non-function"))
+        | _ -> raise (Failure "Invalid"))
   in
   eval_expr expr
 
@@ -118,9 +120,9 @@ let interp str =
       | Some _ -> (
           try Ok (eval Env.empty expr)
           with
-          | AssertFail -> Error "Assertion failed"
-          | DivByZero -> Error "Division by zero"
+          | AssertFail -> Error "Invalid"
+          | DivByZero -> Error "Invalid"
           | Failure msg -> Error msg)
-      | None -> Error "Type checking failed"
+      | None -> Error "Invalidd"
     )
   | None -> Error "Parsing failed"

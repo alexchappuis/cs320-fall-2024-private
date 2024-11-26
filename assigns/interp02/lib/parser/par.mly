@@ -7,7 +7,6 @@ let rec mk_app e es =
   | x :: es -> mk_app (App (e, x)) es
 %}
 
-
 %token <int> NUM
 %token <string> VAR
 %token EOF
@@ -16,6 +15,7 @@ let rec mk_app e es =
 %token LPAREN RPAREN COLON
 %token TRUE FALSE UNIT
 %token INTTY BOOLTY UNITTY
+%token ASSERT
 
 %right OR
 %right AND
@@ -67,6 +67,7 @@ expr:
 
 expr2:
   | e1=expr2; op=bop; e2=expr2 { BinOp (op, e1, e2) }
+  | ASSERT; e=expr3 { Assert e }
   | e=expr3; es=expr3* { mk_app e es }
 
 expr3:
@@ -77,7 +78,7 @@ expr3:
   | x=VAR { Var x }
   | LPAREN; e=expr; RPAREN { e }
 
-%inline bop:
+bop:
   | ADD { Add }
   | SUB { Sub }
   | MUL { Mul }
