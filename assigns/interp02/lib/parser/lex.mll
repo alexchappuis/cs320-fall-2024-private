@@ -2,34 +2,39 @@
 open Par
 }
 
-let whitespace = [' ' '\n' '\t' '\r']+
-let var = ['a'-'z']+
+let whitespace = [' ' '\t' '\n' '\r']+
 let num = '-'? ['0'-'9']+
+let var = ['a'-'z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_' '\'']*
 
 rule read =
   parse
-  | ":" { COLON }
-  | "int" { INTTY }
-  | "bool" { BOOLTY }
-  | "fun" { FUN }
-  | "let" { LET }
-  | "rec" { REC }
-  | "=" { EQUALS }
-  | "in" { IN }
-  | "->" { ARROW }
-  | "(" { LPAREN }
-  | ")" { RPAREN }
   | "if" { IF }
   | "then" { THEN }
   | "else" { ELSE }
-  | "+" { PLUS }
-  | "-" { MINUS }
-  | "*" { TIMES }
+  | "let" { LET }
+  | "in" { IN }
+  | "fun" { FUN }
+  | "->" { ARROW }
+  | "=" { EQ }
+  | "+" { ADD }
+  | "-" { SUB }
+  | "*" { MUL }
+  | "/" { DIV }
+  | "mod" { MOD }
+  | "<" { LT }
+  | "<=" { LTE }
+  | ">" { GT }
+  | ">=" { GTE }
+  | "<>" { NEQ }
+  | "&&" { AND }
+  | "||" { OR }
+  | "()" { UNIT }
   | "true" { TRUE }
   | "false" { FALSE }
-  | "()" { UNIT }
+  | ":" { COLON }
+  | "rec" { REC }
+  | "assert" { ASSERT }
   | num { NUM (int_of_string (Lexing.lexeme lexbuf)) }
   | var { VAR (Lexing.lexeme lexbuf) }
   | whitespace { read lexbuf }
   | eof { EOF }
-  | _ { failwith ("Unexpected character: " ^ (Lexing.lexeme lexbuf)) }
