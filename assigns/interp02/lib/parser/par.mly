@@ -31,10 +31,10 @@ prog:
   | tops=toplet* EOF { tops }
 
 toplet:
-  | LET; x=VAR; args=args_opt; COLON; ty=ty; EQ; e=expr
-    { TopLet (x, args, ty, e) }
-  | LET; REC; x=VAR; args=args; COLON; ty=ty; EQ; e=expr
-    { TopLetRec (x, args, ty, e) }
+  | LET; x=VAR; args=args_opt; COLON; ty=ty; EQ; e=sfexpr
+    { { is_rec = false; name = x; args = args; ty = ty; value = e } }
+  | LET; REC; x=VAR; args=args; COLON; ty=ty; EQ; e=sfexpr
+    { { is_rec = true; name = x; args = args; ty = ty; value = e } }
 
 args_opt:
   | args=args { args }
