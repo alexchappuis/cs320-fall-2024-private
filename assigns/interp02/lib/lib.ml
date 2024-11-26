@@ -4,14 +4,34 @@ let parse = My_parser.parse
 
 let rec desugar prog =
   match prog with
-  | [] -> Unit
-  | stmt :: rest -> (
-      match stmt with
-      | TopLet (x, ty, body) ->
-          Let (x, ty, body, desugar rest)
-      | TopLetRec (f, x, ty_arg, ty_out, body) ->
-          LetRec (f, x, ty_arg, ty_out, body, desugar rest)
+  | [] -> Unit  
+  | l :: ls -> (
+      match l with
+      | TopLet (name, ty, value) ->
+          Let (name, ty, desugar_sfexpr value, desugar ls)
+      
+      | TopLetRec (name, arg, ty_arg, ty_out, value) ->
+          LetRec (name, arg, ty_arg, ty_out, desugar_sfexpr value, desugar ls)
     )
+
+and desugar_sfexpr expr =
+  match expr with
+  | SUnit -> Unit
+  | STrue -> True
+  | SFalse -> False
+  | SNum n -> Num n
+  | SVar v -> Var v
+  | SFun { arg; args; body } -> 
+      Fun (arg, UnitTy, desugar_sfexpr body) 
+      App (desugar_sfexpr e1, desugar_sfexpr e2)
+  | SLet { is_rec; name; args; ty; value; body } -> 
+      Let (name, ty, desugar_sfexpr value, desugar_sfexpr body)
+  | SIf (cond, then_branch, else_branch) -> 
+      If (desugar_sfexpr cond, desugar_sfexpr then_branch, desugar_sfexpr else_branch)
+  | SBop (op, e1, e2) -> 
+      Bop (op, desugar_sfexpr e1, desugar_sfexpr e2)
+  | SAssert e -> 
+      Assert (desugar_sfexpr e)
 
 let rec type_of ctxt expr =
   let rec infer = function
@@ -25,26 +45,29 @@ let rec type_of ctxt expr =
         | Some ty_out -> Some (FunTy (ty, ty_out))
         | None -> None
       )
-    | Add (e1, e2) | Sub (e1, e2) | Mul (e1, e2) ->
-        if infer e1 = Some IntTy && infer e2 = Some IntTy then Some IntTy
-        else None
-    | Eq (e1, e2) ->
-        if infer e1 = Some IntTy && infer e2 = Some IntTy then Some BoolTy
-        else None
+    | Bop (op, e1, e2) -> (
+        match op with
+        | Add | Sub | Mul | Div | Mod ->
+            if infer e1 = Some IntTy && infer e2 = Some IntTy then Some IntTy
+            else None
+        | Eq ->
+            if infer e1 = Some IntTy && infer e2 = Some IntTy then Some BoolTy
+            else None
+        | _ -> None
+      )
     | If (e1, e2, e3) -> (
         match infer e1, infer e2, infer e3 with
         | Some BoolTy, Some t2, Some t3 when t2 = t3 -> Some t2
         | _ -> None
       )
-    | Let (x, ty, e1, e2) -> (
-        match infer e1 with
-        | Some t1 when t1 = ty -> type_of ((x, ty) :: ctxt) e2
+    | Let { is_rec; name; ty; value; body } -> (
+        match infer value with
+        | Some v_ty when v_ty = ty -> type_of ((name, ty) :: ctxt) body
         | _ -> None
       )
-    | LetRec (f, x, ty_arg, ty_out, e1, e2) -> (
-        let ctxt' = (f, FunTy (ty_arg, ty_out)) :: (x, ty_arg) :: ctxt in
-        match type_of ctxt' e1 with
-        | Some ty when ty = ty_out -> type_of ((f, FunTy (ty_arg, ty_out)) :: ctxt) e2
+    | Assert e -> (
+        match infer e with
+        | Some BoolTy -> Some BoolTy
         | _ -> None
       )
     | App (e1, e2) -> (
@@ -66,37 +89,42 @@ let rec eval env expr =
     | Var x -> (
         match Env.find_opt x env with
         | Some v -> v
-        | None -> raise (Failure "Unbound variable")
+        | None -> raise (Failure "Invalid")
       )
     | Num n -> VNum n
     | Fun (x, _, body) -> VClos (x, body, env, None)
-    | Add (e1, e2) ->
-        (match eval_expr e1, eval_expr e2 with
-        | VNum n1, VNum n2 -> VNum (n1 + n2)
-        | _ -> raise (Failure "Invalid"))
-    | Sub (e1, e2) ->
-        (match eval_expr e1, eval_expr e2 with
-        | VNum n1, VNum n2 -> VNum (n1 - n2)
-        | _ -> raise (Failure "Invalid"))
-    | Mul (e1, e2) ->
-        (match eval_expr e1, eval_expr e2 with
-        | VNum n1, VNum n2 -> VNum (n1 * n2)
-        | _ -> raise (Failure "Invalid"))
-    | Eq (e1, e2) ->
-        (match eval_expr e1, eval_expr e2 with
+    | Bop (op, e1, e2) -> (
+        match eval_expr e1, eval_expr e2 with
+        | VNum n1, VNum n2 -> (
+            match op with
+            | Add -> VNum (n1 + n2)
+            | Sub -> VNum (n1 - n2)
+            | Mul -> VNum (n1 * n2)
+            | Div -> if n2 = 0 then raise DivByZero else VNum (n1 / n2)
+            | Mod -> VNum (n1 mod n2)
+            | _ -> raise (Failure "Invalid")
+          )
+        | _ -> raise (Failure "Invalid operands")
+      )
+    | Eq (e1, e2) -> (
+        match eval_expr e1, eval_expr e2 with
         | VNum n1, VNum n2 -> VBool (n1 = n2)
-        | _ -> raise (Failure "Invalid"))
+        | _ -> raise (Failure "Invalid")
+      )
     | If (e1, e2, e3) ->
         (match eval_expr e1 with
         | VBool true -> eval_expr e2
         | VBool false -> eval_expr e3
         | _ -> raise (Failure "Invalid"))
-    | Let (x, _, e1, e2) ->
-        let v = eval_expr e1 in
-        eval (Env.add x v env) e2
-    | LetRec (f, x, _, _, e1, e2) ->
-        let rec_env = Env.add f (VClos (x, e1, env, Some f)) env in
-        eval rec_env e2
+    | Let { is_rec; name; ty; value; body } ->
+        let v = eval_expr value in
+        eval (Env.add name v env) body
+    | Assert e -> (
+        match eval_expr e with
+        | VBool true -> VUnit
+        | VBool false -> raise AssertFail
+        | _ -> raise (Failure "Invalid")
+      )
     | App (e1, e2) ->
         (match eval_expr e1 with
         | VClos (x, body, closure_env, None) ->
@@ -120,9 +148,9 @@ let interp str =
       | Some _ -> (
           try Ok (eval Env.empty expr)
           with
-          | AssertFail -> Error "Invalid"
+          | AssertFail -> Error "failed"
           | DivByZero -> Error "Invalid"
           | Failure msg -> Error msg)
-      | None -> Error "Invalidd"
+      | None -> Error "Type error"
     )
   | None -> Error "Parsing failed"
