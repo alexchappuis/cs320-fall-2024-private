@@ -16,8 +16,6 @@ let rec mk_sapp e es =
 %token TRUE FALSE UNIT
 %token INTTY BOOLTY UNITTY
 %token REC
-%token COLON
-%token ASSERT
 
 %right OR
 %right AND

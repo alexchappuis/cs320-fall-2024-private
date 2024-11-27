@@ -2,36 +2,38 @@ open Utils
 
 let parse = My_parser.parse
 
-let rec desugar prog =
-  match prog with
-  | [] -> Unit  
-  | l :: ls -> (
-      match l with
-      | TopLet (name, ty, value) ->
-          Let (name, ty, desugar_sfexpr value, desugar ls)
-      
-      | TopLetRec (name, arg, ty_arg, ty_out, value) ->
-          LetRec (name, arg, ty_arg, ty_out, desugar_sfexpr value, desugar ls)
-    )
-
-and desugar_sfexpr expr =
-  match expr with
-  | SUnit -> Unit
-  | STrue -> True
-  | SFalse -> False
-  | SNum n -> Num n
-  | SVar v -> Var v
-  | SFun { arg; args; body } -> 
-      Fun (arg, UnitTy, desugar_sfexpr body) 
-      App (desugar_sfexpr e1, desugar_sfexpr e2)
-  | SLet { is_rec; name; args; ty; value; body } -> 
-      Let (name, ty, desugar_sfexpr value, desugar_sfexpr body)
-  | SIf (cond, then_branch, else_branch) -> 
-      If (desugar_sfexpr cond, desugar_sfexpr then_branch, desugar_sfexpr else_branch)
-  | SBop (op, e1, e2) -> 
-      Bop (op, desugar_sfexpr e1, desugar_sfexpr e2)
-  | SAssert e -> 
-      Assert (desugar_sfexpr e)
+let desugar prog =
+  let rec desugar_toplets = function
+    | [] -> Unit
+    | { is_rec; name; args; ty; value } :: rest ->
+        let function_type =
+          List.fold_right (fun (_, arg_ty) acc -> FunTy(arg_ty, acc)) args ty
+        in
+        let desugared_value =
+          List.fold_right (fun (arg, arg_ty) acc -> Fun(arg, arg_ty, acc)) args (desugar_expr value)
+        in
+        Let {
+          is_rec;
+          name;
+          ty = function_type;
+          value = desugared_value;
+          body = desugar_toplets rest;
+        }
+  and desugar_expr = function
+    | SLet { is_rec; name; args; ty; value; body } ->
+        let function_type =
+          List.fold_right (fun (_, arg_ty) acc -> FunTy(arg_ty, acc)) args ty
+        in
+        let desugared_value =
+          List.fold_right (fun (arg, arg_ty) acc -> Fun(arg, arg_ty, acc)) args (desugar_expr value)
+        in
+        Let {
+          is_rec;
+          name;
+          ty = function_type;
+          value = desugared_value;
+          body = desugar_expr body;
+        }
 
 let rec type_of ctxt expr =
   let rec infer = function
