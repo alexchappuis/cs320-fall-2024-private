@@ -126,103 +126,84 @@ let type_of (e : expr) : (ty, error) result =
   in
   typecheck Env.empty e
 
-let eval (expr : expr) : value =
-  let rec go env expr =
-    match expr with
-    | Unit -> VUnit
-    | True -> VBool true
-    | False -> VBool false
-    | Num n -> VNum n
-    | Var x -> Env.find x env
-    | Let { is_rec; name; ty = _; value; body } ->
-        let extended_env = eval_let env is_rec name value in
-        go extended_env body
-    | Fun (arg, _, body) -> VClos { name = None; arg; body; env }
-    | App (e1, e2) -> eval_app env e1 e2
-    | If (cond, then_, else_) -> eval_if env cond then_ else_
-    | Bop (op, e1, e2) -> eval_bop env op e1 e2
-    | Assert e -> eval_assert env e
-
-  and eval_let env is_rec name value =
-    if is_rec then
-      match value with
-      | Fun (arg, _, body) ->
-          let closure = VClos { name = Some name; arg; body; env } in
-          Env.add name closure env
-      | _ ->
-          let gensym_arg = gensym () in
-          let wrapped_body = Fun (gensym_arg, UnitTy, value) in
-          let closure = VClos { name = Some name; arg = gensym_arg; body = wrapped_body; env } in
-          Env.add name closure env
-    else
-      let v = go env value in
-      Env.add name v env
-
-  and eval_app env e1 e2 =
-    match go env e1 with
-    | VClos { name = Some fname; arg; body; env = closure_env } ->
-        let v2 = go env e2 in
-        let extended_env =
-          Env.add fname (VClos { name = Some fname; arg; body; env = closure_env })
-            (Env.add arg v2 closure_env)
-        in
-        go extended_env body
-    | VClos { name = None; arg; body; env = closure_env } ->
-        let v2 = go env e2 in
-        let extended_env = Env.add arg v2 closure_env in
-        go extended_env body
-    | _ -> assert false
-
-  and eval_if env cond then_ else_ =
-    match go env cond with
-    | VBool true -> go env then_
-    | VBool false -> go env else_
-    | _ -> assert false
-
-  and eval_bop env op e1 e2 =
-    match op with
-    | And -> (
-        match go env e1 with
-        | VBool false -> VBool false
-        | VBool true -> go env e2
-        | _ -> assert false
-      )
-    | Or -> (
-        match go env e1 with
-        | VBool true -> VBool true
-        | VBool false -> go env e2
-        | _ -> assert false
-      )
-    | _ ->
-        let v1 = go env e1 in
-        let v2 = go env e2 in
-        eval_arith_bop op v1 v2
-
-  and eval_arith_bop op v1 v2 =
-    match (v1, v2, op) with
-    | (VNum n1, VNum n2, Add) -> VNum (n1 + n2)
-    | (VNum n1, VNum n2, Sub) -> VNum (n1 - n2)
-    | (VNum n1, VNum n2, Mul) -> VNum (n1 * n2)
-    | (VNum n1, VNum n2, Div) ->
-        if n2 = 0 then raise DivByZero else VNum (n1 / n2)
-    | (VNum n1, VNum n2, Mod) ->
-        if n2 = 0 then raise DivByZero else VNum (n1 mod n2)
-    | (VNum n1, VNum n2, Lt) -> VBool (n1 < n2)
-    | (VNum n1, VNum n2, Lte) -> VBool (n1 <= n2)
-    | (VNum n1, VNum n2, Gt) -> VBool (n1 > n2)
-    | (VNum n1, VNum n2, Gte) -> VBool (n1 >= n2)
-    | (VNum n1, VNum n2, Eq) -> VBool (n1 = n2)
-    | (VNum n1, VNum n2, Neq) -> VBool (n1 <> n2)
-    | _ -> assert false
-
-  and eval_assert env e =
-    match go env e with
-    | VBool true -> VUnit
-    | VBool false -> raise AssertFail
-    | _ -> assert false
-
-  in
-  go Env.empty expr
+  let eval (expr : expr) : value =
+    let rec go env expr =
+      match expr with
+      | Unit -> VUnit
+      | True -> VBool true
+      | False -> VBool false
+      | Num n -> VNum n
+      | Var x -> Env.find x env
+      | Let { is_rec; name; ty = _; value; body } ->
+          let extended_env = handle_let env is_rec name value in
+          go extended_env body
+      | Fun (arg, _, body) -> VClos { name = None; arg; body; env }
+      | App (e1, e2) -> handle_app env e1 e2
+      | If (cond, then_, else_) -> handle_if env cond then_ else_
+      | Bop (op, e1, e2) -> handle_bop env op e1 e2
+      | Assert e -> handle_assert env e
+  
+    and handle_let env is_rec name value =
+      let build_env value =
+        match value with
+        | Fun (arg, _, body) ->
+            VClos { name = Some name; arg; body; env }
+        | _ ->
+            let gensym_arg = gensym () in
+            VClos { name = Some name; arg = gensym_arg; body = Fun (gensym_arg, UnitTy, value); env }
+      in
+      if is_rec then Env.add name (build_env value) env
+      else Env.add name (go env value) env
+  
+    and handle_app env e1 e2 =
+      let func = go env e1 in
+      let arg_value = go env e2 in
+      match func with
+      | VClos { name; arg; body; env = closure_env } ->
+          let extended_env = extend_env_with_closure closure_env name arg arg_value func in
+          go extended_env body
+      | _ -> failwith "app to non function"
+    
+    and extend_env_with_closure closure_env name arg arg_value func =
+      match name with
+      | Some fname ->
+          Env.add arg arg_value (Env.add fname func closure_env)
+      | None ->
+          Env.add arg arg_value closure_env
+  
+    and handle_if env cond then_ else_ =
+      match go env cond with
+      | VBool true -> go env then_
+      | VBool false -> go env else_
+      | _ -> failwith "cond must be a bool"
+  
+    and handle_bop env op e1 e2 =
+      let left = go env e1 in
+      let right = go env e2 in
+      match (op, left, right) with
+      | (Add, VNum l, VNum r) -> VNum (l + r)
+      | (Sub, VNum l, VNum r) -> VNum (l - r)
+      | (Mul, VNum l, VNum r) -> VNum (l * r)
+      | (Div, VNum l, VNum r) -> if r = 0 then raise DivByZero else VNum (l / r)
+      | (Mod, VNum l, VNum r) -> if r = 0 then raise DivByZero else VNum (l mod r)
+      | (Lt, VNum l, VNum r) -> VBool (l < r)
+      | (Lte, VNum l, VNum r) -> VBool (l <= r)
+      | (Gt, VNum l, VNum r) -> VBool (l > r)
+      | (Gte, VNum l, VNum r) -> VBool (l >= r)
+      | (Eq, VNum l, VNum r) -> VBool (l = r)
+      | (Neq, VNum l, VNum r) -> VBool (l <> r)
+      | (And, VBool l, VBool r) -> VBool (l && r)
+      | (Or, VBool l, VBool r) -> VBool (l || r)
+      | _ -> failwith "Invalid binary operation"
+  
+    and handle_assert env e =
+      match go env e with
+      | VBool true -> VUnit
+      | VBool false -> raise AssertFail
+      | _ -> failwith "assert requires a bool"
+  
+    in
+    go Env.empty expr
 
   
 let interp (str : string) : (value, error) result =
