@@ -1,158 +1,230 @@
 open Utils
+include My_parser
 
 let parse = My_parser.parse
 
-let desugar prog =
-  let rec desugar_toplets = function
-    | [] -> Unit
-    | { is_rec; name; args; ty; value } :: rest ->
-        let function_type =
-          List.fold_right (fun (_, arg_ty) acc -> FunTy(arg_ty, acc)) args ty
-        in
-        let desugared_value =
-          List.fold_right (fun (arg, arg_ty) acc -> Fun(arg, arg_ty, acc)) args (desugar_expr value)
-        in
-        Let {
-          is_rec;
-          name;
-          ty = function_type;
-          value = desugared_value;
-          body = desugar_toplets rest;
-        }
-  and desugar_expr = function
-    | SLet { is_rec; name; args; ty; value; body } ->
-        let function_type =
-          List.fold_right (fun (_, arg_ty) acc -> FunTy(arg_ty, acc)) args ty
-        in
-        let desugared_value =
-          List.fold_right (fun (arg, arg_ty) acc -> Fun(arg, arg_ty, acc)) args (desugar_expr value)
-        in
-        Let {
-          is_rec;
-          name;
-          ty = function_type;
-          value = desugared_value;
-          body = desugar_expr body;
-        }
 
-let rec type_of ctxt expr =
-  let rec infer = function
-    | Unit -> Some UnitTy
-    | True -> Some BoolTy
-    | False -> Some BoolTy
-    | Var x -> List.assoc_opt x ctxt
-    | Num _ -> Some IntTy
+let rec desugar (prog : prog) : expr =
+  match prog with
+  | [] -> Unit
+  | decl :: rest -> (
+      let function_type =
+        List.fold_right (fun (_, arg_ty) acc -> FunTy (arg_ty, acc)) decl.args decl.ty
+      in
+      let desugared_value =
+        List.fold_right (fun (arg, arg_ty) acc -> Fun (arg, arg_ty, acc))
+          decl.args
+          (desugar_expr decl.value)
+      in
+      match decl.is_rec with
+      | false ->
+          Let { is_rec = false; name = decl.name; ty = function_type; value = desugared_value; body = desugar rest }
+      | true ->
+          Let { is_rec = true; name = decl.name; ty = function_type; value = desugared_value; body = desugar rest }
+    )
+
+and desugar_expr (expr : sfexpr) : expr =
+  match expr with
+  | SLet { is_rec; name; args; ty; value; body } -> (
+      let function_type =
+        List.fold_right (fun (_, arg_ty) acc -> FunTy (arg_ty, acc)) args ty
+      in
+      let desugared_value =
+        List.fold_right (fun (arg, arg_ty) acc -> Fun (arg, arg_ty, acc))
+          args
+          (desugar_expr value)
+      in
+      match is_rec with
+      | false -> Let { is_rec = false; name; ty = function_type; value = desugared_value; body = desugar_expr body }
+      | true -> Let { is_rec = true; name; ty = function_type; value = desugared_value; body = desugar_expr body }
+    )
+  | SFun { arg; args; body } ->
+      List.fold_right (fun (arg, arg_ty) acc -> Fun (arg, arg_ty, acc)) (arg :: args) (desugar_expr body)
+  | SIf (cond, then_, else_) -> If (desugar_expr cond, desugar_expr then_, desugar_expr else_)
+  | SApp (e1, e2) -> App (desugar_expr e1, desugar_expr e2)
+  | SBop (op, e1, e2) -> Bop (op, desugar_expr e1, desugar_expr e2)
+  | SAssert e -> Assert (desugar_expr e)
+  | SUnit -> Unit
+  | STrue -> True
+  | SFalse -> False
+  | SNum n -> Num n
+  | SVar x -> Var x
+
+exception AssertFail  
+exception DivByZero
+
+
+let rec type_of (ctxt : (string * ty) list) (e : expr) : (ty, error) result =
+  let rec go = function
+    | Unit -> Ok UnitTy
+    | True | False -> Ok BoolTy
+    | Num _ -> Ok IntTy
+    | Var x -> (
+        match List.assoc_opt x ctxt with
+        | Some ty -> Ok ty
+        | None -> Error (UnknownVar x)
+      )
+    | If (e1, e2, e3) -> (
+        match (go e1, go e2, go e3) with
+        | Ok BoolTy, Ok t2, Ok t3 when t2 = t3 -> Ok t2
+        | Ok BoolTy, Ok t2, Ok t3 -> Error (IfTyErr (t2, t3))
+        | Ok ty, _, _ -> Error (IfCondTyErr ty)
+        | Error err, _, _ -> Error err
+        | _, Error err, _ -> Error err
+        | _, _, Error err -> Error err
+      )
     | Fun (x, ty, body) -> (
         match type_of ((x, ty) :: ctxt) body with
-        | Some ty_out -> Some (FunTy (ty, ty_out))
-        | None -> None
+        | Ok ty_out -> Ok (FunTy (ty, ty_out))
+        | Error err -> Error err
+      )
+    | App (e1, e2) -> (
+        match (go e1, go e2) with
+        | Ok (FunTy (ty_arg, ty_out)), Ok t2 when ty_arg = t2 -> Ok ty_out
+        | Ok (FunTy (ty_arg, _)), Ok t2 -> Error (FunArgTyErr (ty_arg, t2))
+        | Ok ty, _ -> Error (FunAppTyErr ty)
+        | Error err, _ -> Error err
+        | _, Error err -> Error err
+      )
+    | Let { is_rec; name; ty; value; body } -> (
+        match type_of ctxt value with
+        | Ok t1 when t1 = ty -> type_of ((name, ty) :: ctxt) body
+        | Ok t1 -> Error (LetTyErr (ty, t1))
+        | Error err -> Error err
+      )
+    | Bop (op, e1, e2) ->
+        let op_expected_ty =
+          match op with
+          | Add | Sub | Mul | Div | Mod | Lt | Lte | Gt | Gte -> IntTy
+          | And | Or -> BoolTy
+          | Eq | Neq -> IntTy
+        in
+        (
+          match (go e1, go e2) with
+          | Ok ty1, Ok ty2 when ty1 = ty2 && ty1 = op_expected_ty -> Ok (if op = Eq || op = Neq then BoolTy else ty1)
+          | Ok ty1, Ok ty2 ->
+              if ty1 <> op_expected_ty then Error (OpTyErrL (op, op_expected_ty, ty1))
+              else Error (OpTyErrR (op, op_expected_ty, ty2))
+          | Error err, _ -> Error err
+          | _, Error err -> Error err
+        )
+    | Assert e -> (
+        match go e with
+        | Ok BoolTy -> Ok UnitTy
+        | Ok ty -> Error (AssertTyErr ty)
+        | Error err -> Error err
+      )
+  in
+  go e
+
+let type_of (e : expr) : (ty, error) result = type_of [] e
+
+let eval (expr : expr) : value option =
+  let rec go env = function
+    | Unit -> Some VUnit
+    | True -> Some (VBool true)
+    | False -> Some (VBool false)
+    | Num n -> Some (VNum n)
+    | Var x -> Env.find_opt x env
+    | Let { is_rec; name; ty = _; value; body } -> (
+        let extended_env =
+          if is_rec then
+            match value with
+            | Fun (arg, _, body) ->
+                let closure = VClos { name = Some name; arg; body; env } in
+                Env.add name closure env
+            | _ ->
+                let gensym_arg = gensym () in
+                let wrapped_body = Fun (gensym_arg, UnitTy, value) in
+                let closure = VClos { name = Some name; arg = gensym_arg; body = wrapped_body; env } in
+                Env.add name closure env
+          else
+            let v = go env value in
+            match v with
+            | Some v -> Env.add name v env
+            | None -> env
+        in
+        go extended_env body
+      )
+    | Fun (arg, _, body) -> Some (VClos { name = None; arg; body; env })
+    | App (e1, e2) -> (
+        match go env e1 with
+        | Some (VClos { name = Some fname; arg; body; env = closure_env }) -> (
+            match go env e2 with
+            | Some v2 ->
+                let extended_env =
+                  Env.add fname (VClos { name = Some fname; arg; body; env = closure_env })
+                    (Env.add arg v2 closure_env)
+                in
+                go extended_env body
+            | _ -> None
+          )
+        | Some (VClos { name = None; arg; body; env = closure_env }) -> (
+            match go env e2 with
+            | Some v2 ->
+                let extended_env = Env.add arg v2 closure_env in
+                go extended_env body
+            | _ -> None
+          )
+        | _ -> None
+      )
+    | If (cond, then_, else_) -> (
+        match go env cond with
+        | Some (VBool true) -> go env then_
+        | Some (VBool false) -> go env else_
+        | _ -> None
       )
     | Bop (op, e1, e2) -> (
         match op with
-        | Add | Sub | Mul | Div | Mod ->
-            if infer e1 = Some IntTy && infer e2 = Some IntTy then Some IntTy
-            else None
-        | Eq ->
-            if infer e1 = Some IntTy && infer e2 = Some IntTy then Some BoolTy
-            else None
-        | _ -> None
-      )
-    | If (e1, e2, e3) -> (
-        match infer e1, infer e2, infer e3 with
-        | Some BoolTy, Some t2, Some t3 when t2 = t3 -> Some t2
-        | _ -> None
-      )
-    | Let { is_rec; name; ty; value; body } -> (
-        match infer value with
-        | Some v_ty when v_ty = ty -> type_of ((name, ty) :: ctxt) body
-        | _ -> None
-      )
-    | Assert e -> (
-        match infer e with
-        | Some BoolTy -> Some BoolTy
-        | _ -> None
-      )
-    | App (e1, e2) -> (
-        match infer e1, infer e2 with
-        | Some (FunTy (ty_arg, ty_out)), Some t2 when ty_arg = t2 -> Some ty_out
-        | _ -> None
-      )
-  in
-  infer expr
-
-exception AssertFail
-exception DivByZero
-
-let rec eval env expr =
-  let rec eval_expr = function
-    | Unit -> VUnit
-    | True -> VBool true
-    | False -> VBool false
-    | Var x -> (
-        match Env.find_opt x env with
-        | Some v -> v
-        | None -> raise (Failure "Invalid")
-      )
-    | Num n -> VNum n
-    | Fun (x, _, body) -> VClos (x, body, env, None)
-    | Bop (op, e1, e2) -> (
-        match eval_expr e1, eval_expr e2 with
-        | VNum n1, VNum n2 -> (
-            match op with
-            | Add -> VNum (n1 + n2)
-            | Sub -> VNum (n1 - n2)
-            | Mul -> VNum (n1 * n2)
-            | Div -> if n2 = 0 then raise DivByZero else VNum (n1 / n2)
-            | Mod -> VNum (n1 mod n2)
-            | _ -> raise (Failure "Invalid")
+        | And -> (
+            match go env e1 with
+            | Some (VBool false) -> Some (VBool false)
+            | Some (VBool true) -> go env e2
+            | _ -> None
           )
-        | _ -> raise (Failure "Invalid operands")
+        | Or -> (
+            match go env e1 with
+            | Some (VBool true) -> Some (VBool true)
+            | Some (VBool false) -> go env e2
+            | _ -> None
+          )
+        | _ -> (
+            let v1 = go env e1 in
+            let v2 = go env e2 in
+            match (v1, v2, op) with
+            | (Some (VNum n1), Some (VNum n2), Add) -> Some (VNum (n1 + n2))
+            | (Some (VNum n1), Some (VNum n2), Sub) -> Some (VNum (n1 - n2))
+            | (Some (VNum n1), Some (VNum n2), Mul) -> Some (VNum (n1 * n2))
+            | (Some (VNum n1), Some (VNum n2), Div) -> if n2 = 0 then None else Some (VNum (n1 / n2))
+            | (Some (VNum n1), Some (VNum n2), Mod) -> if n2 = 0 then None else Some (VNum (n1 mod n2))
+            | (Some (VNum n1), Some (VNum n2), Lt) -> Some (VBool (n1 < n2))
+            | (Some (VNum n1), Some (VNum n2), Lte) -> Some (VBool (n1 <= n2))
+            | (Some (VNum n1), Some (VNum n2), Gt) -> Some (VBool (n1 > n2))
+            | (Some (VNum n1), Some (VNum n2), Gte) -> Some (VBool (n1 >= n2))
+            | (Some (VNum n1), Some (VNum n2), Eq) -> Some (VBool (n1 = n2))
+            | (Some (VNum n1), Some (VNum n2), Neq) -> Some (VBool (n1 <> n2))
+            | _ -> None
+          )
       )
-    | Eq (e1, e2) -> (
-        match eval_expr e1, eval_expr e2 with
-        | VNum n1, VNum n2 -> VBool (n1 = n2)
-        | _ -> raise (Failure "Invalid")
-      )
-    | If (e1, e2, e3) ->
-        (match eval_expr e1 with
-        | VBool true -> eval_expr e2
-        | VBool false -> eval_expr e3
-        | _ -> raise (Failure "Invalid"))
-    | Let { is_rec; name; ty; value; body } ->
-        let v = eval_expr value in
-        eval (Env.add name v env) body
     | Assert e -> (
-        match eval_expr e with
-        | VBool true -> VUnit
-        | VBool false -> raise AssertFail
-        | _ -> raise (Failure "Invalid")
+        match go env e with
+        | Some (VBool true) -> Some VUnit
+        | Some (VBool false) -> None
+        | _ -> None
       )
-    | App (e1, e2) ->
-        (match eval_expr e1 with
-        | VClos (x, body, closure_env, None) ->
-            let v = eval_expr e2 in
-            eval (Env.add x v closure_env) body
-        | VClos (x, body, closure_env, Some f) ->
-            let v = eval_expr e2 in
-            let new_env =
-              Env.add f (VClos (x, body, closure_env, Some f)) closure_env
-            in
-            eval (Env.add x v new_env) body
-        | _ -> raise (Failure "Invalid"))
   in
-  eval_expr expr
+  go Env.empty expr
 
-let interp str =
-  match My_parser.parse str with
+let interp (str : string) : (value, error) result =
+  match parse str with
   | Some prog -> (
       let expr = desugar prog in
-      match type_of [] expr with
-      | Some _ -> (
-          try Ok (eval Env.empty expr)
-          with
-          | AssertFail -> Error "failed"
-          | DivByZero -> Error "Invalid"
-          | Failure msg -> Error msg)
-      | None -> Error "Type error"
+      match type_of expr with
+      | Ok _ -> (
+          match eval expr with
+          | Some v -> Ok v
+          | None -> Error ParseErr
+        )
+      | Error err -> Error err
     )
-  | None -> Error "Parsing failed"
+  | None -> Error ParseErr

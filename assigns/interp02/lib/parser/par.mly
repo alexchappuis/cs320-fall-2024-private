@@ -1,74 +1,97 @@
 %{
 open Utils
-
-let rec mk_sapp e es =
-  match es with
-  | [] -> e
-  | x :: es -> mk_sapp (SApp (e, x)) es
 %}
 
-%token <int> NUM
-%token <string> VAR
 %token EOF
-%token IF THEN ELSE LET IN FUN ARROW
-%token ADD SUB MUL DIV MOD LT LTE GT GTE EQ NEQ AND OR EQUALS
-%token LPAREN RPAREN
-%token TRUE FALSE UNIT
-%token INTTY BOOLTY UNITTY
-%token REC
+%token FUN "fun"
+%token ARROW "->"
+%token LPAREN "("
+%token RPAREN ")"
+%token LET "let"
+%token REC "rec"
+%token EQ "="
+%token IN "in"
+%token <string> VAR
+%token <int> NUM
+%token IF "if"
+%token THEN "then"
+%token ELSE "else"
+%token ADD "+"
+%token MUL "*"
+%token DIV "/"
+%token SUB "-"
+%token TRUE "true"
+%token FALSE "false"
+%token ASSERT "assert"
+%token COLON ":"
+%token INTTY "int"
+%token BOOLTY "bool"
+%token UNIT "()"
+%token UNITTY "unit"
+%token MOD "mod"
+%token AND "&&"
+%token OR "||"
+%token LT "<"
+%token LTE "<="
+%token GT ">"
+%token GTE ">="
+%token NEQ "<>"
 
-%right OR
-%right AND
-%left LT LTE GT GTE EQ NEQ
-%left ADD SUB
-%left MUL DIV MOD
-%left EQUALS 
 
-%start <Utils.toplet list> prog
+%right ARROW
+%left OR
+%left AND
+%left LT LTE GT GTE EQUALS NEQ
+%left PLUS MINUS
+%left TIMES MOD
+%start <Utils.prog> prog
 
 %%
 
 prog:
-  | toplets=toplet_list EOF { toplets }
-
-toplet_list:
-  | t=toplet { [t] }
-  | ts=toplet_list t=toplet { t :: ts }
+  | ls = toplet* EOF { ls }
 
 toplet:
-  | LET; is_rec=rec_flag; name=VAR; args=args_opt; COLON; ty=ty; EQ; value=sfexpr {
-      { is_rec; name; args; ty; value; }
-    }
+  | LET x = VAR args = arg* COLON ty = ty EQ e = expr
+    { { is_rec = false; name = x; args = args; ty; value = e } }
+  | LET REC f = VAR args = arg* COLON ty = ty EQ e = expr
+   { { is_rec = false; name = f; args = args; ty; value = e } }
 
+arg:
+  | LPAREN x = VAR COLON ty = ty RPAREN { (x, ty) }
 
-rec_flag:
-  | REC { true }
-  | { false }
+ty:
+  | INTTY { IntTy }
+  | BOOLTY { BoolTy }
+  | UNITTY { UnitTy }
+  | t1 = ty ARROW t2 = ty { FunTy (t1, t2) }
+  | LPAREN ty = ty RPAREN { ty }
 
-sfexpr:
-  | IF; e1=sfexpr; THEN; e2=sfexpr; ELSE; e3=sfexpr { SIf (e1, e2, e3) }
-  | LET; is_rec=rec_flag; name=VAR; args=args_opt; COLON; ty=ty; EQ; value=sfexpr; IN; body=sfexpr {
-      SLet { is_rec; name; args; ty; value; body }
-    }
-  | FUN; arg=arg; args=args_opt; ARROW; body=sfexpr {
-      SFun { arg; args; body }
-    }
-  | ASSERT; e=sfexpr { SAssert e }
-  | e=sfexpr2 { e }
+expr:
+  | LET x = VAR args = arg* COLON ty = ty EQ e1 = expr IN e2 = expr
+   { SLet { is_rec = false; name = x; args = args; ty; value = e1; body = e2 } }
+  | LET REC x = VAR arg = arg ; args = arg* COLON ty = ty EQ e1 = expr IN e2 = expr
+   { SLet { is_rec = true; name = x; args = arg :: args; ty; value = e1; body = e2 } }
+  | IF e1 = expr THEN e2 = expr ELSE e3 = expr
+   { SIf (e1, e2, e3) }
+  | FUN arg = arg ; args = arg* ARROW e = expr
+  { SFun { arg = arg; args = args; body = e } }
+  | e = expr2 { e }
 
-sfexpr2:
-  | e1=sfexpr2; op=sbop; e2=sfexpr2 { SBop (op, e1, e2) }
-  | e=sfexpr3; es=sfexpr3* { mk_sapp e es }
+expr2:
+  | e1 = expr2 bop = bop e2 = expr2 { SBop (bop, e1, e2) }
+  | ASSERT e = expr3 { SAssert e }
+  | e = expr3 { e }
 
-sfexpr3:
+expr3:
   | UNIT { SUnit }
   | TRUE { STrue }
   | FALSE { SFalse }
-  | n=NUM { SNum n }
-  | x=VAR { SVar x }
-  | LPAREN; e=sfexpr; RPAREN { e }
+  | n = NUM { SNum n }
+  | x = VAR { SVar x }
+  | LPAREN e = expr RPAREN { e }
 
-%inline sbop:
+%inline bop:
   | ADD { Add }
   | SUB { Sub }
   | MUL { Mul }
@@ -82,21 +105,3 @@ sfexpr3:
   | NEQ { Neq }
   | AND { And }
   | OR { Or }
-
-arg:
-  | v=VAR; COLON; ty=ty { (v, ty) }
-
-args_opt:
-  | { [] }
-  | args=args { args }
-
-args:
-  | LPAREN; arg=arg; RPAREN { [arg] }
-  | args=args; LPAREN; arg=arg; RPAREN { arg :: args }
-
-ty:
-  | INTTY { IntTy }
-  | BOOLTY { BoolTy }
-  | UNITTY { UnitTy }
-  | t1=ty; ARROW; t2=ty { FunTy (t1, t2) }
-  | LPAREN; t=ty; RPAREN { t }
