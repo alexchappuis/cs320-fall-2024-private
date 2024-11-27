@@ -52,80 +52,70 @@ and desugar_expr (expr : sfexpr) : expr =
 exception AssertFail  
 exception DivByZero
 
-let type_of (e : expr) : (ty, error) result =
-  let rec typecheck env expr =
-    match expr with
-    | Unit -> Ok UnitTy
-    | True | False -> Ok BoolTy
-    | Num _ -> Ok IntTy
-    | Var x -> (
-        match Env.find_opt x env with
-        | Some ty -> Ok ty
-        | None -> Error (UnknownVar x)
-      )
-    | If (cond, then_, else_) -> (
-        match typecheck env cond with
-        | Ok BoolTy -> (
-            match typecheck env then_ with
-            | Ok ty_then -> (
-                match typecheck env else_ with
-                | Ok ty_else when ty_then = ty_else -> Ok ty_then
-                | Ok ty_else -> Error (IfTyErr (ty_then, ty_else))
-                | Error e -> Error e
-              )
-            | Error e -> Error e
-          )
-        | Ok ty -> Error (IfCondTyErr ty)
-        | Error e -> Error e
-      )
-    | Fun (arg, arg_ty, body) ->
-        let extended_env = Env.add arg arg_ty env in
-        (match typecheck extended_env body with
-         | Ok body_ty -> Ok (FunTy (arg_ty, body_ty))
-         | Error e -> Error e)
-    | App (e1, e2) -> (
-        match typecheck env e1 with
-        | Ok (FunTy (arg_ty, ret_ty)) -> (
-            match typecheck env e2 with
-            | Ok actual_ty when arg_ty = actual_ty -> Ok ret_ty
-            | Ok actual_ty -> Error (FunArgTyErr (arg_ty, actual_ty))
-            | Error e -> Error e
-          )
-        | Ok ty -> Error (FunAppTyErr ty)
-        | Error e -> Error e
-      )
-    | Let { name; ty = expected_ty; value; body; _ } -> (
-        match typecheck env value with
-        | Ok actual_ty when actual_ty = expected_ty ->
-            typecheck (Env.add name expected_ty env) body
-        | Ok actual_ty -> Error (LetTyErr (expected_ty, actual_ty))
-        | Error e -> Error e
-      )
-    | Bop (op, e1, e2) -> (
-        let (expected_ty1, expected_ty2, result_ty) = match op with
-          | Add | Sub | Mul | Div | Mod -> (IntTy, IntTy, IntTy)
-          | Lt | Lte | Gt | Gte | Eq | Neq -> (IntTy, IntTy, BoolTy)
-          | And | Or -> (BoolTy, BoolTy, BoolTy)
-        in
-        match typecheck env e1 with
-        | Error e -> Error e
-        | Ok ty1 when ty1 <> expected_ty1 -> Error (OpTyErrL (op, expected_ty1, ty1))
-        | Ok _ -> (
-            match typecheck env e2 with
-            | Error e -> Error e
-            | Ok ty2 when ty2 <> expected_ty2 -> Error (OpTyErrR (op, expected_ty2, ty2))
-            | Ok _ -> Ok result_ty
-          )
-      )
-    | Assert e -> (
-        match typecheck env e with
-        | Ok BoolTy -> Ok UnitTy
-        | Ok ty -> Error (AssertTyErr ty)
-        | Error e -> Error e
-      )
-  in
-  typecheck Env.empty e
+type ctx = (string * ty) list
 
+(* let rec pp_ctx fmt (ctx : ctx) =
+  Format.fprintf fmt "[";
+  List.iter (fun (x, v) -> Format.fprintf fmt "(%s, %a); " x pp_ty v) ctx;
+  Format.fprintf fmt "]" *)
+
+let ty_equal t1 t2 =
+  if t1 = t2 then ()
+  else failwith "type error"
+
+let rec infer (ctx : ctx) (e : expr) : ty =
+  match e with
+  | Unit -> UnitTy
+  | True | False -> BoolTy
+  | Num _ -> IntTy
+  | Var x -> (
+      try List.assoc x ctx with
+      | Not_found -> failwith ("undefined variable " ^ x)
+    )
+  | If (cond, then_, else_) ->
+      let t_cond = infer ctx cond in
+      ty_equal t_cond BoolTy;
+      let t_then = infer ctx then_ in
+      let t_else = infer ctx else_ in
+      ty_equal t_then t_else;
+      t_then
+  | Fun (arg, arg_ty, body) ->
+      let t_body = infer ((arg, arg_ty) :: ctx) body in
+      FunTy (arg_ty, t_body)
+  | App (e1, e2) -> (
+      let t_fn = infer ctx e1 in
+      match t_fn with
+      | FunTy (arg_ty, ret_ty) ->
+          let t_arg = infer ctx e2 in
+          ty_equal arg_ty t_arg;
+          ret_ty
+      | _ -> failwith "type error in function application"
+    )
+  | Let { is_rec; name; ty = expected_ty; value; body } ->
+      let t_value = infer ctx value in
+      ty_equal expected_ty t_value;
+      let extended_ctx = (name, expected_ty) :: ctx in
+      infer extended_ctx body
+  | Bop (op, e1, e2) -> (
+      let (expected_ty1, expected_ty2, result_ty) = match op with
+        | Add | Sub | Mul | Div | Mod -> (IntTy, IntTy, IntTy)
+        | Lt | Lte | Gt | Gte | Eq | Neq -> (IntTy, IntTy, BoolTy)
+        | And | Or -> (BoolTy, BoolTy, BoolTy)
+      in
+      let t1 = infer ctx e1 in
+      ty_equal t1 expected_ty1;
+      let t2 = infer ctx e2 in
+      ty_equal t2 expected_ty2;
+      result_ty
+    )
+  | Assert e ->
+      let t = infer ctx e in
+      ty_equal t BoolTy;
+      UnitTy
+
+let type_of (e : expr) : (ty, error) result =
+  try Ok (infer [] e) with
+  | Failure msg -> Error (ParseErr) 
 let eval (expr : expr) : value =
   let rec go env = function
     | Unit -> VUnit
