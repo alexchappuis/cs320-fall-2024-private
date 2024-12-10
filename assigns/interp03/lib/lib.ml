@@ -188,17 +188,17 @@ let rec eval_expr (env:dyn_env) (e:expr) : value =
     (match eval c with
      | VBool true -> eval t
      | VBool false -> eval f
-     | _ -> failwith "If guard not boolean")
+     | _ -> failwith "impossible")
   | Bop (op,e1,e2) ->
     let v1 = eval e1 in
     let v2 = eval e2 in
     let int_op f = match v1,v2 with
       | VInt i1, VInt i2 -> VInt (f i1 i2)
-      | _ -> failwith "Type error"
+      | _ -> failwith " impossible"
     in
     let float_op f = match v1,v2 with
       | VFloat f1, VFloat f2 -> VFloat (f f1 f2)
-      | _ -> failwith "Type error"
+      | _ -> failwith "impossible"
     in
     begin match op with
     | Add -> int_op (fun x y->x+y)
@@ -207,18 +207,18 @@ let rec eval_expr (env:dyn_env) (e:expr) : value =
     | Div -> (match v1,v2 with
         | VInt _, VInt 0 -> raise DivByZero
         | VInt x,VInt y -> VInt (x/y)
-        | _ -> failwith "Type error")
+        | _ -> failwith "impossible")
     | Mod -> (match v1,v2 with
         | VInt _,VInt 0 -> raise DivByZero
         | VInt x,VInt y -> VInt(x mod y)
-        | _ -> failwith "Type error")
+        | _ -> failwith "impossible")
     | AddF -> float_op ( +. )
     | SubF -> float_op ( -. )
     | MulF -> float_op ( *. )
     | DivF -> (match v1,v2 with
         | VFloat _,VFloat 0.0 -> raise DivByZero
         | VFloat x,VFloat y -> VFloat(x /. y)
-        | _ -> failwith "Type error")
+        | _ -> failwith "impossible")
     | PowF -> float_op ( ** )
     | Lt | Lte | Gt | Gte | Eq | Neq ->
       let cmp_val v1 v2 =
@@ -244,7 +244,7 @@ let rec eval_expr (env:dyn_env) (e:expr) : value =
                 if c=0 then cmp_lists xs ys else c
             in cmp_lists l1 l2
           | VClos _,_ | _,VClos _ -> fail_funvals ()
-          | _ -> failwith "Incompatible types for comparison"
+          | _ -> failwith " types arent compatiable for comparison"
         in eqv v1 v2
       in
       let c = cmp_val v1 v2 in
@@ -259,21 +259,21 @@ let rec eval_expr (env:dyn_env) (e:expr) : value =
     | And ->
       (match v1 with
        | VBool false -> VBool false
-       | VBool true -> (match v2 with VBool b -> VBool b | _-> failwith "Type error")
-       | _ -> failwith "Type error")
+       | VBool true -> (match v2 with VBool b -> VBool b | _-> failwith "type error")
+       | _ -> failwith "error")
     | Or ->
       (match v1 with
        | VBool true -> VBool true
-       | VBool false -> (match v2 with VBool b->VBool b |_ ->failwith "Type error")
-       | _-> failwith "Type error")
+       | VBool false -> (match v2 with VBool b->VBool b |_ ->failwith "type error")
+       | _-> failwith "error")
     | Cons ->
       (match v2 with
        | VList l -> VList (v1::l)
-       | _ -> failwith "Type error")
+       | _ -> failwith "error")
     | Concat ->
       (match v1,v2 with
        | VList l1, VList l2 -> VList (l1 @ l2)
-       | _ -> failwith "Type error")
+       | _ -> failwith "error")
     | Comma ->
       VPair(v1,v2)
     end
@@ -289,7 +289,7 @@ let rec eval_expr (env:dyn_env) (e:expr) : value =
          | Some f -> Env.add f v1 (Env.add arg v2 env')
        in
        eval_expr env'' body
-     | _ -> failwith "Apply non-fun")
+     | _ -> failwith "error")
   | Let {is_rec=false; name; value; body} ->
     let v_val = eval value in
     eval_expr (Env.add name v_val env) body
